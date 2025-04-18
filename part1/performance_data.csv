@@ -1,0 +1,7 @@
+Function,Regular Time (ms),Dual Number Time (ms),Overhead Factor
+sin(x),0.00011,3e-05,0.272727
+x^2,4e-05,3e-05,0.75
+sin(x)*cos(x),6e-05,3e-05,0.5
+exp(sin(x)),3e-05,2e-05,0.666667
+ln(x^2+1),5e-05,3e-05,0.6
+complex,4e-05,3e-05,0.75

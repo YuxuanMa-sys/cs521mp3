@@ -1,0 +1,35 @@
+# Compiled files
+*.o
+*.so
+*.dll
+*.exe
+*.pyc
+__pycache__/
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+*.log
+*.tmp
+*.temp
+
+# Computational output
+part2/hlo_dx1.txt
+part2/hlo_dx2.txt
+part2/jaxpr_vmap_both.txt
+part2/jaxpr_vmap_first.txt
+hlo_dx1.txt
+hlo_dx2.txt
+jaxpr_vmap_both.txt
+jaxpr_vmap_first.txt
+
+# Executables
+part1/dual_test
+part1/performance_plot
+
+# Others
+.DS_Store 
