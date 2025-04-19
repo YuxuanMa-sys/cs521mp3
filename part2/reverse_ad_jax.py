@@ -4,8 +4,28 @@ from jax import grad, jit, vmap, make_jaxpr
 import timeit
 import numpy as np
 
-# Disable JAX memory preallocation for cleaner output
+# Initialize JAX - we'll start with CPU for most operations
+# but will try GPU in the performance comparison if available
 jax.config.update('jax_platform_name', 'cpu')
+
+# Check available devices
+cpu_devices = jax.devices('cpu')
+try:
+    gpu_devices = jax.devices('gpu')
+    gpu_available = len(gpu_devices) > 0
+    if gpu_available:
+        print(f"GPU device(s) found: {len(gpu_devices)}")
+        for i, dev in enumerate(gpu_devices):
+            print(f"  GPU {i}: {dev}")
+    else:
+        print("No GPU devices found, will use CPU only")
+except:
+    gpu_available = False
+    print("GPU not available or JAX GPU support not installed")
+
+print(f"CPU device(s) found: {len(cpu_devices)}")
+for i, dev in enumerate(cpu_devices):
+    print(f"  CPU {i}: {dev}")
 
 def f(x1, x2):
     """
@@ -160,32 +180,72 @@ def compare_runtime():
     _ = g1(x1, x2)
     _ = g2(x1, x2)
     
-    # Time them
     print("\nPerformance comparison:")
+    
+    # Reduced number of runs and loops to prevent running forever
+    number = 300  # Reduced from 1000 for faster testing
+    repeat = 3    # Reduced from 5 for faster testing
     
     # Benchmark on CPU
     print("\nCPU Performance:")
-    
-    # Number of runs and loops for timing
-    number = 10000
-    repeat = 7
+    jax.config.update('jax_platform_name', 'cpu')
     
     # Approach 1
-    times_g1 = timeit.repeat(lambda: g1(x1, x2), repeat=repeat, number=number)
-    avg_time_g1 = np.mean(times_g1) / number * 1e6  # Convert to microseconds
-    std_time_g1 = np.std(times_g1) / number * 1e6
+    times_g1_cpu = timeit.repeat(lambda: g1(x1, x2), repeat=repeat, number=number)
+    avg_time_g1_cpu = np.mean(times_g1_cpu) / number * 1e6  # Convert to microseconds
+    std_time_g1_cpu = np.std(times_g1_cpu) / number * 1e6
     
     # Approach 2
-    times_g2 = timeit.repeat(lambda: g2(x1, x2), repeat=repeat, number=number)
-    avg_time_g2 = np.mean(times_g2) / number * 1e6
-    std_time_g2 = np.std(times_g2) / number * 1e6
+    times_g2_cpu = timeit.repeat(lambda: g2(x1, x2), repeat=repeat, number=number)
+    avg_time_g2_cpu = np.mean(times_g2_cpu) / number * 1e6
+    std_time_g2_cpu = np.std(times_g2_cpu) / number * 1e6
     
-    print(f"g1 (multiple jit): {avg_time_g1:.2f} µs ± {std_time_g1:.2f} µs per loop (mean ± std. dev. of {repeat} runs, {number} loops each)")
-    print(f"g2 (single jit): {avg_time_g2:.2f} µs ± {std_time_g2:.2f} µs per loop (mean ± std. dev. of {repeat} runs, {number} loops each)")
-    print(f"Speedup of g2 over g1: {avg_time_g1/avg_time_g2:.2f}x")
+    print(f"g1 (multiple jit): {avg_time_g1_cpu:.2f} µs ± {std_time_g1_cpu:.2f} µs per loop (mean ± std. dev. of {repeat} runs, {number} loops each)")
+    print(f"g2 (single jit): {avg_time_g2_cpu:.2f} µs ± {std_time_g2_cpu:.2f} µs per loop (mean ± std. dev. of {repeat} runs, {number} loops each)")
+    print(f"Speedup of g2 over g1: {avg_time_g1_cpu/avg_time_g2_cpu:.2f}x")
     
-    # Skip GPU testing since it's likely not available on this EC2 instance
-    print("\nGPU testing skipped on this AWS EC2 instance.")
+    # Try to benchmark on GPU if available
+    try:
+        # Check if GPU is available
+        gpu_devices = jax.devices('gpu')
+        if len(gpu_devices) > 0:
+            print("\nGPU Performance:")
+            jax.config.update('jax_platform_name', 'gpu')
+            
+            # Warm up on GPU
+            _ = g1(x1, x2)
+            _ = g2(x1, x2)
+            
+            # Number of runs for GPU (can be less than CPU as GPU is usually faster)
+            gpu_number = 500  # Reduced from 5000 for faster testing
+            gpu_repeat = 3    # Reduced from 5 for faster testing
+            
+            # Approach 1 on GPU
+            times_g1_gpu = timeit.repeat(lambda: g1(x1, x2), repeat=gpu_repeat, number=gpu_number)
+            avg_time_g1_gpu = np.mean(times_g1_gpu) / gpu_number * 1e6
+            std_time_g1_gpu = np.std(times_g1_gpu) / gpu_number * 1e6
+            
+            # Approach 2 on GPU
+            times_g2_gpu = timeit.repeat(lambda: g2(x1, x2), repeat=gpu_repeat, number=gpu_number)
+            avg_time_g2_gpu = np.mean(times_g2_gpu) / gpu_number * 1e6
+            std_time_g2_gpu = np.std(times_g2_gpu) / gpu_number * 1e6
+            
+            print(f"g1 (multiple jit): {avg_time_g1_gpu:.2f} µs ± {std_time_g1_gpu:.2f} µs per loop (mean ± std. dev. of {gpu_repeat} runs, {gpu_number} loops each)")
+            print(f"g2 (single jit): {avg_time_g2_gpu:.2f} µs ± {std_time_g2_gpu:.2f} µs per loop (mean ± std. dev. of {gpu_repeat} runs, {gpu_number} loops each)")
+            print(f"Speedup of g2 over g1 on GPU: {avg_time_g1_gpu/avg_time_g2_gpu:.2f}x")
+            
+            # Compare CPU vs GPU
+            print("\nCPU vs GPU Speedup:")
+            print(f"g1 CPU vs GPU: {avg_time_g1_cpu/avg_time_g1_gpu:.2f}x")
+            print(f"g2 CPU vs GPU: {avg_time_g2_cpu/avg_time_g2_gpu:.2f}x")
+        else:
+            print("\nNo GPU device found, skipping GPU performance testing.")
+    except Exception as e:
+        print(f"\nError during GPU testing: {e}")
+        print("GPU performance testing skipped.")
+    
+    # Reset platform to CPU for the rest of the code
+    jax.config.update('jax_platform_name', 'cpu')
 
 # 6. Extend for vector inputs using vmap
 def vector_inputs():
