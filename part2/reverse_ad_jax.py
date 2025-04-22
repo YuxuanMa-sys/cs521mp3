@@ -4,11 +4,10 @@ from jax import grad, jit, vmap, make_jaxpr
 import timeit
 import numpy as np
 
-# Initialize JAX - we'll start with CPU for most operations
-# but will try GPU in the performance comparison if available
+# Start with CPU platform
 jax.config.update('jax_platform_name', 'cpu')
 
-# Check available devices
+# Check what devices we have
 cpu_devices = jax.devices('cpu')
 try:
     gpu_devices = jax.devices('gpu')
@@ -28,30 +27,22 @@ for i, dev in enumerate(cpu_devices):
     print(f"  CPU {i}: {dev}")
 
 def f(x1, x2):
-    """
-    Function: f(x1, x2) = ln(x1) + x1*x2 - sin(x2)
-    """
+    """Function: f(x1, x2) = ln(x1) + x1*x2 - sin(x2)"""
     return jnp.log(x1) + x1 * x2 - jnp.sin(x2)
 
-# 1. Compute the value and gradients using jax.grad
+# 1. Compute gradients using jax.grad
 def compute_gradients_positional():
-    """
-    Compute the gradients using jax.grad with positional parameters.
-    """
-    # Compute gradient with respect to x1 (first argument)
+    """Compute gradients using jax.grad with positional parameters"""
+    # Get gradients for each input
     dy_dx1 = grad(f, argnums=0)
-    
-    # Compute gradient with respect to x2 (second argument)
     dy_dx2 = grad(f, argnums=1)
     
     # Test values
     x1_val = 2.0
     x2_val = 5.0
     
-    # Compute the function value
+    # Compute values
     f_val = f(x1_val, x2_val)
-    
-    # Compute the gradients
     grad_x1 = dy_dx1(x1_val, x2_val)
     grad_x2 = dy_dx2(x1_val, x2_val)
     
@@ -61,16 +52,13 @@ def compute_gradients_positional():
     
     return dy_dx1, dy_dx2
 
-# 2. Print the jaxpr code for the two gradients
+# 2. Print the jaxpr code for gradients
 def print_jaxpr_code():
-    """
-    Print the jaxpr code that JAX generates for the two gradients.
-    """
-    # Create functions to compute gradients
+    """Print and analyze the jaxpr code for gradients"""
     dy_dx1 = grad(f, argnums=0)
     dy_dx2 = grad(f, argnums=1)
     
-    # Get jaxpr for the gradients
+    # Get jaxpr representation
     jaxpr_dx1 = make_jaxpr(dy_dx1)(2.0, 5.0)
     jaxpr_dx2 = make_jaxpr(dy_dx2)(2.0, 5.0)
     
@@ -80,7 +68,7 @@ def print_jaxpr_code():
     print("\nJAXPR for gradient with respect to x2:")
     print(jaxpr_dx2)
     
-    # Count the number of lines
+    # Count lines in jaxpr code
     jaxpr_dx1_str = str(jaxpr_dx1)
     jaxpr_dx2_str = str(jaxpr_dx2)
     
@@ -90,7 +78,7 @@ def print_jaxpr_code():
     print(f"\nNumber of lines in jaxpr for gradient with respect to x1: {dx1_lines}")
     print(f"Number of lines in jaxpr for gradient with respect to x2: {dx2_lines}")
     
-    # Original function jaxpr for comparison
+    # Compare with original function
     jaxpr_f = make_jaxpr(f)(2.0, 5.0)
     f_lines = str(jaxpr_f).count('\n')
     
@@ -98,19 +86,17 @@ def print_jaxpr_code():
     print(f"Ratio of lines for grad(x1) vs original: {dx1_lines/f_lines:.2f}x")
     print(f"Ratio of lines for grad(x2) vs original: {dx2_lines/f_lines:.2f}x")
 
-# 3. Implementation of "classical" reverse mode AD for comparison
+# 3. Classical reverse mode AD implementation
 def classical_reverse_ad(x1, x2):
-    """
-    Manual implementation of reverse-mode AD for the function f(x1, x2) = ln(x1) + x1*x2 - sin(x2)
-    """
-    # Forward pass - calculate intermediate values
+    """Manual implementation of reverse-mode AD"""
+    # Forward pass
     v1 = jnp.log(x1)    # ln(x1)
     v2 = x1 * x2        # x1*x2
     v3 = jnp.sin(x2)    # sin(x2)
     v4 = v1 + v2        # ln(x1) + x1*x2
     y = v4 - v3         # ln(x1) + x1*x2 - sin(x2)
     
-    # Backward pass - propagate gradients
+    # Backward pass
     dy_dy = 1.0
     dy_dv4 = dy_dy
     dy_dv3 = -dy_dy
@@ -130,17 +116,13 @@ def classical_reverse_ad(x1, x2):
     
     return y, dy_dx1, dy_dx2
 
-# 4. Compile to HLO and analyze optimizations
+# 4. Compile to HLO representation
 def compile_to_hlo():
-    """
-    Translate the jaxpr code to HLO representation and discuss optimizations.
-    """
-    # Create functions to compute gradients
+    """Compile to HLO and save for analysis"""
     dy_dx1 = jit(grad(f, argnums=0))
     dy_dx2 = jit(grad(f, argnums=1))
     
-    # Get HLO for the gradients
-    # Note: jax.xla_computation is deprecated, use jax.jit(...).lower().compiler_ir() instead
+    # Get HLO representation
     hlo_dx1 = jit(dy_dx1).lower(2.0, 5.0).compiler_ir(dialect='hlo')
     hlo_dx2 = jit(dy_dx2).lower(2.0, 5.0).compiler_ir(dialect='hlo')
     
@@ -152,7 +134,7 @@ def compile_to_hlo():
     hlo_dx2_str = str(hlo_dx2)
     print(hlo_dx2_str[:500] + "...\n[output truncated]")
     
-    # Save the full HLO to files for later analysis
+    # Save complete HLO to files
     with open("hlo_dx1.txt", "w") as file:
         file.write(hlo_dx1_str)
     
@@ -161,52 +143,49 @@ def compile_to_hlo():
     
     print("\nFull HLO saved to part2/hlo_dx1.txt and part2/hlo_dx2.txt")
 
-# 5. Compare runtime of different JIT compilation approaches
+# 5. Compare runtime of JIT approaches
 def compare_runtime():
-    """
-    Compare the runtime of two versions of the program compiled just-in-time.
-    """
-    # Create test data
+    """Compare performance of multiple vs single JIT calls"""
+    # Test inputs
     x1 = 2.0
     x2 = 5.0
     
     # Approach 1: Multiple jit calls
     g1 = lambda x1, x2: (jit(f)(x1, x2), jit(grad(f, argnums=0))(x1, x2), jit(grad(f, argnums=1))(x1, x2))
     
-    # Approach 2: Single jit call with a lambda
+    # Approach 2: Single jit call
     g2 = jit(lambda x1, x2: (f(x1, x2), grad(f, argnums=0)(x1, x2), grad(f, argnums=1)(x1, x2)))
     
-    # Warm up the functions
+    # Warm up
     _ = g1(x1, x2)
     _ = g2(x1, x2)
     
     print("\nPerformance comparison:")
     
-    # Reduced number of runs and loops to prevent running forever
-    number = 300  # Reduced from 1000 for faster testing
-    repeat = 3    # Reduced from 5 for faster testing
+    # Benchmark parameters
+    number = 300  # Loops per run
+    repeat = 3    # Number of runs
     
-    # Benchmark on CPU
+    # CPU benchmarks
     print("\nCPU Performance:")
     jax.config.update('jax_platform_name', 'cpu')
     
-    # Approach 1
+    # Time g1 (multiple jit)
     times_g1_cpu = timeit.repeat(lambda: g1(x1, x2), repeat=repeat, number=number)
-    avg_time_g1_cpu = np.mean(times_g1_cpu) / number * 1e6  # Convert to microseconds
+    avg_time_g1_cpu = np.mean(times_g1_cpu) / number * 1e6  # µs
     std_time_g1_cpu = np.std(times_g1_cpu) / number * 1e6
     
-    # Approach 2
+    # Time g2 (single jit)
     times_g2_cpu = timeit.repeat(lambda: g2(x1, x2), repeat=repeat, number=number)
     avg_time_g2_cpu = np.mean(times_g2_cpu) / number * 1e6
     std_time_g2_cpu = np.std(times_g2_cpu) / number * 1e6
     
-    print(f"g1 (multiple jit): {avg_time_g1_cpu:.2f} µs ± {std_time_g1_cpu:.2f} µs per loop (mean ± std. dev. of {repeat} runs, {number} loops each)")
-    print(f"g2 (single jit): {avg_time_g2_cpu:.2f} µs ± {std_time_g2_cpu:.2f} µs per loop (mean ± std. dev. of {repeat} runs, {number} loops each)")
+    print(f"g1 (multiple jit): {avg_time_g1_cpu:.2f} µs ± {std_time_g1_cpu:.2f} µs per loop ({repeat} runs, {number} loops each)")
+    print(f"g2 (single jit): {avg_time_g2_cpu:.2f} µs ± {std_time_g2_cpu:.2f} µs per loop ({repeat} runs, {number} loops each)")
     print(f"Speedup of g2 over g1: {avg_time_g1_cpu/avg_time_g2_cpu:.2f}x")
     
-    # Try to benchmark on GPU if available
+    # Try GPU if available
     try:
-        # Check if GPU is available
         gpu_devices = jax.devices('gpu')
         if len(gpu_devices) > 0:
             print("\nGPU Performance:")
@@ -216,25 +195,25 @@ def compare_runtime():
             _ = g1(x1, x2)
             _ = g2(x1, x2)
             
-            # Number of runs for GPU (can be less than CPU as GPU is usually faster)
-            gpu_number = 500  # Reduced from 5000 for faster testing
-            gpu_repeat = 3    # Reduced from 5 for faster testing
+            # GPU benchmark settings
+            gpu_number = 500
+            gpu_repeat = 3
             
-            # Approach 1 on GPU
+            # Time g1 on GPU
             times_g1_gpu = timeit.repeat(lambda: g1(x1, x2), repeat=gpu_repeat, number=gpu_number)
             avg_time_g1_gpu = np.mean(times_g1_gpu) / gpu_number * 1e6
             std_time_g1_gpu = np.std(times_g1_gpu) / gpu_number * 1e6
             
-            # Approach 2 on GPU
+            # Time g2 on GPU
             times_g2_gpu = timeit.repeat(lambda: g2(x1, x2), repeat=gpu_repeat, number=gpu_number)
             avg_time_g2_gpu = np.mean(times_g2_gpu) / gpu_number * 1e6
             std_time_g2_gpu = np.std(times_g2_gpu) / gpu_number * 1e6
             
-            print(f"g1 (multiple jit): {avg_time_g1_gpu:.2f} µs ± {std_time_g1_gpu:.2f} µs per loop (mean ± std. dev. of {gpu_repeat} runs, {gpu_number} loops each)")
-            print(f"g2 (single jit): {avg_time_g2_gpu:.2f} µs ± {std_time_g2_gpu:.2f} µs per loop (mean ± std. dev. of {gpu_repeat} runs, {gpu_number} loops each)")
+            print(f"g1 (multiple jit): {avg_time_g1_gpu:.2f} µs ± {std_time_g1_gpu:.2f} µs per loop ({gpu_repeat} runs, {gpu_number} loops each)")
+            print(f"g2 (single jit): {avg_time_g2_gpu:.2f} µs ± {std_time_g2_gpu:.2f} µs per loop ({gpu_repeat} runs, {gpu_number} loops each)")
             print(f"Speedup of g2 over g1 on GPU: {avg_time_g1_gpu/avg_time_g2_gpu:.2f}x")
             
-            # Compare CPU vs GPU
+            # CPU vs GPU comparison
             print("\nCPU vs GPU Speedup:")
             print(f"g1 CPU vs GPU: {avg_time_g1_cpu/avg_time_g1_gpu:.2f}x")
             print(f"g2 CPU vs GPU: {avg_time_g2_cpu/avg_time_g2_gpu:.2f}x")
@@ -244,65 +223,58 @@ def compare_runtime():
         print(f"\nError during GPU testing: {e}")
         print("GPU performance testing skipped.")
     
-    # Reset platform to CPU for the rest of the code
+    # Back to CPU
     jax.config.update('jax_platform_name', 'cpu')
 
-# 6. Extend for vector inputs using vmap
+# 6. Vector input handling with vmap
 def vector_inputs():
-    """
-    Extend g2 to work with vector inputs using the jax.vmap function.
-    """
-    # Create the function g2 (single jit with a lambda)
+    """Use vmap to handle vectorized inputs"""
+    # Our function with gradients
     g2 = jit(lambda x1, x2: (f(x1, x2), grad(f, argnums=0)(x1, x2), grad(f, argnums=1)(x1, x2)))
     
-    # Create test data
+    # Generate test data
     x1s = jnp.linspace(1.0, 10.0, 1000)
     x2s = x1s + 1.0
     
-    # a) Batching across both parameters
+    # a) Vectorize across both inputs
     vmap_both = vmap(g2, in_axes=(0, 0))
-    
-    # Get jaxpr for this case
     jaxpr_both = make_jaxpr(vmap_both)(x1s, x2s)
     
     print("\nJAXPR for vmap across both parameters (truncated):")
     jaxpr_both_str = str(jaxpr_both)
     print(jaxpr_both_str[:500] + "...\n[output truncated]")
     
-    # Save the full jaxpr to a file
+    # Save full jaxpr
     with open("jaxpr_vmap_both.txt", "w") as file:
         file.write(jaxpr_both_str)
     
-    # b) Batching across only the first parameter
+    # b) Vectorize across first input only
     vmap_first = vmap(g2, in_axes=(0, None))
-    
-    # Get jaxpr for this case
     jaxpr_first = make_jaxpr(vmap_first)(x1s, 0.5)
     
     print("\nJAXPR for vmap across only the first parameter (truncated):")
     jaxpr_first_str = str(jaxpr_first)
     print(jaxpr_first_str[:500] + "...\n[output truncated]")
     
-    # Save the full jaxpr to a file
+    # Save full jaxpr
     with open("jaxpr_vmap_first.txt", "w") as file:
         file.write(jaxpr_first_str)
     
     print("\nFull jaxpr saved to part2/jaxpr_vmap_both.txt and part2/jaxpr_vmap_first.txt")
     
-    # Test the vectorized functions
+    # Test with small sample
     print("\nTesting vectorized functions:")
-    
-    # Test vmap_both with a small sample
     small_x1s = jnp.array([1.0, 2.0, 3.0])
     small_x2s = jnp.array([2.0, 3.0, 4.0])
     
+    # Test both-vector case
     results_both = vmap_both(small_x1s, small_x2s)
     print(f"\nResults for vmap across both parameters (sample of 3):")
     print(f"Function values: {results_both[0]}")
     print(f"Gradients wrt x1: {results_both[1]}")
     print(f"Gradients wrt x2: {results_both[2]}")
     
-    # Test vmap_first with the same x1 values but a single x2
+    # Test first-vector-only case
     x2_scalar = 0.5
     results_first = vmap_first(small_x1s, x2_scalar)
     print(f"\nResults for vmap across only the first parameter (sample of 3, x2={x2_scalar}):")
@@ -320,7 +292,7 @@ if __name__ == "__main__":
     dy_dx1, dy_dx2 = compute_gradients_positional()
     
     # 2. Print jaxpr code
-    print("\n2. JAX generated jaxpr code for the gradients:")
+    print("\n2. JAX generated jaxpr code for gradients:")
     print_jaxpr_code()
     
     # 3. Classical reverse-mode AD comparison
@@ -344,7 +316,7 @@ if __name__ == "__main__":
     print(f"Gradient wrt x1: JAX={jax_dy_dx1}, Classical={classical_dy_dx1}, Difference={jax_dy_dx1-classical_dy_dx1}")
     print(f"Gradient wrt x2: JAX={jax_dy_dx2}, Classical={classical_dy_dx2}, Difference={jax_dy_dx2-classical_dy_dx2}")
     
-    # 4. Compile to HLO and analyze optimizations
+    # 4. Compile to HLO
     print("\n4. Compiling to HLO representation:")
     compile_to_hlo()
     
